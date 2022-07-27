@@ -1,36 +1,18 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
-import {
-    ActivityIndicator,
-    Dimensions,
-    FlatList,
-    RefreshControl,
-    Text,
-} from 'react-native';
+import { Dimensions, FlatList } from 'react-native';
 import Swiper from 'react-native-swiper';
 import styled from 'styled-components/native';
 import Slide from '../components/Slide';
 import VMedia from '../components/VMedia';
 import HMedia from '../components/HMedia';
 import { moviesAPI } from '../api';
-import { useQuery, useQueryClient } from 'react-query';
-
-const API_KEY = '35962825f155cdfe3696115110be486a';
-
-const Container = styled.FlatList``;
-
-const View = styled.View`
-    flex: 1;
-`;
+import { useInfiniteQuery, useQuery, useQueryClient } from 'react-query';
+import { Loader } from '../components/Loader';
+import HList from '../components/HList';
 
 const TrendingScroll = styled.FlatList`
     margin-top: 20px;
-`;
-
-const Loader = styled.View`
-    flex: 1;
-    justify-content: center;
-    align-items: center;
 `;
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -65,6 +47,7 @@ const renderHMedia = ({ item }) => (
         original_title={item.original_title}
         release_date={item.release_date}
         overview={item.overview}
+        fullData={item}
     />
 );
 
@@ -76,38 +59,46 @@ const HSeparator = styled.View`
 `;
 
 const Movies: React.FC<NativeStackScreenProps<any, 'Movies'>> = () => {
+    const [refreshing, setRefreshing] = useState(false);
     const queryClient = useQueryClient();
-    const {
-        isLoading: nowPlayingLoading,
-        data: nowPlayingData,
-        refetch: refetchNowPlaying,
-        isRefetching: isRefetchingNowPlaying,
-    } = useQuery(['movies', 'nowPlaying'], moviesAPI.getNowPlaying);
+    const { isLoading: nowPlayingLoading, data: nowPlayingData } = useQuery(
+        ['movies', 'nowPlaying'],
+        moviesAPI.getNowPlaying
+    );
     const {
         isLoading: upcomingLoading,
         data: upcomingData,
-        refetch: refetchUpcoming,
-        isRefetching: isRefetchingUpcoming,
-    } = useQuery(['movies', 'Upcoming'], moviesAPI.getUpcoming);
-    const {
-        isLoading: trendingLoading,
-        data: trendingData,
-        refetch: refetchTrending,
-        isRefetching: isRefetchingTrending,
-    } = useQuery(['movies', 'Trending'], moviesAPI.getTrending);
+        hasNextPage,
+        fetchNextPage,
+    } = useInfiniteQuery(['movies', 'Upcoming'], moviesAPI.getUpcoming, {
+        getNextPageParam: (currentPage) => {
+            const nextPage = currentPage.page + 1;
+            return nextPage > currentPage.total_pages ? null : nextPage;
+        },
+    });
+    const { isLoading: trendingLoading, data: trendingData } = useQuery(
+        ['movies', 'Trending'],
+        moviesAPI.getTrending
+    );
     const loading = nowPlayingLoading || upcomingLoading || trendingLoading;
     const onRefresh = async () => {
-        queryClient.refetchQueries(['movies']);
+        setRefreshing(true);
+        await queryClient.refetchQueries(['movies']);
+        setRefreshing(false);
     };
 
-    const refreshing =
-        isRefetchingNowPlaying || isRefetchingUpcoming || isRefetchingTrending;
+    const loadMore = () => {
+        if (hasNextPage) {
+            fetchNextPage();
+        }
+    };
+
     return loading ? (
-        <Loader>
-            <ActivityIndicator />
-        </Loader>
+        <Loader />
     ) : (
         <FlatList
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.5}
             onRefresh={onRefresh}
             refreshing={refreshing}
             ListHeaderComponent={
@@ -133,27 +124,19 @@ const Movies: React.FC<NativeStackScreenProps<any, 'Movies'>> = () => {
                                 original_title={movie.original_title}
                                 vote_average={movie.vote_average}
                                 overview={movie.overview}
+                                fullData={movie}
                             />
                         ))}
                     </Swiper>
-                    <ListContainer>
-                        <ListTitle>Trending Movies </ListTitle>
-                        <TrendingScroll
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            data={trendingData?.results}
-                            keyExtractor={movieKeyExtractor}
-                            renderItem={renderVMedia}
-                            ItemSeparatorComponent={VSeparator}
-                            contentContainerStyle={{ paddingHorizontal: 30 }}
-                        />
-                    </ListContainer>
+                    {trendingData ? (
+                        <HList data={trendingData} title='Trending Movies' />
+                    ) : null}
                     <ListContainer>
                         <CommingSoonTitle>Comming Soon</CommingSoonTitle>
                     </ListContainer>
                 </>
             }
-            data={upcomingData?.results}
+            data={upcomingData?.pages.map((page) => page.results).flat()}
             keyExtractor={movieKeyExtractor}
             renderItem={renderHMedia}
             ItemSeparatorComponent={HSeparator}

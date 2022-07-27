@@ -1,8 +1,10 @@
+import { useNavigation } from '@react-navigation/native';
+import { TouchableOpacity } from 'react-native';
 import styled from 'styled-components/native';
 import Poster from './Poster';
 import Votes from './Votes';
 
-const Movie = styled.View`
+const Container = styled.View`
     align-items: center;
 `;
 
@@ -13,17 +15,26 @@ const Title = styled.Text`
     margin-bottom: 5px;
 `;
 
-function VMedia({ poster_path, original_title, vote_average }) {
+function VMedia({ poster_path, original_title, vote_average, fullData }) {
+    const navigation = useNavigation();
+    const goToDetail = () => {
+        navigation.navigate('Stack', {
+            screen: 'Detail',
+            params: { ...fullData },
+        });
+    };
     return (
-        <Movie>
-            <Poster path={poster_path} />
-            <Title>
-                {original_title.slice(0, 13)}
-                {original_title.length > 13 ? '...' : null}
-            </Title>
+        <TouchableOpacity onPress={goToDetail}>
+            <Container>
+                <Poster path={poster_path} />
+                <Title>
+                    {original_title.slice(0, 13)}
+                    {original_title.length > 13 ? '...' : null}
+                </Title>
 
-            <Votes vote={vote_average} />
-        </Movie>
+                <Votes vote={vote_average} />
+            </Container>
+        </TouchableOpacity>
     );
 }
 
